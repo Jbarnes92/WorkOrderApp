@@ -1,0 +1,146 @@
+﻿@page "/workorders/edit/{Id:int}"
+@rendermode InteractiveServer
+@using System.Net.Http.Json
+@using WorkOrderApp.Application.WorkOrders.Models
+@inject NavigationManager Navigation
+@inject IHttpClientFactory HttpClientFactory
+
+<h3>Edit Work Order</h3>
+
+@if (isLoading)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <div class="mb-3">
+        <label>Title</label>
+        <input class="form-control" @bind="model.Title" />
+    </div>
+
+    <div class="mb-3">
+        <label>Description</label>
+        <textarea class="form-control" @bind="model.Description"></textarea>
+    </div>
+
+    <div class="mb-3">
+        <label>Status</label>
+        <select class="form-control" @bind="model.Status">
+            <option value="Open">Open</option>
+            <option value="In Progress">In Progress</option>
+            <option value="Closed">Closed</option>
+        </select>
+    </div>
+
+    <div class="mb-3">
+        <label>Site Code</label>
+        <input class="form-control" @bind="model.SiteCode" />
+    </div>
+
+    <button type="button" class="btn btn-primary" @onclick="Save">
+        Save Changes
+    </button>
+
+    <a class="btn btn-secondary ms-2" href="/workorders">
+        Cancel
+    </a>
+}
+
+@if (!string.IsNullOrWhiteSpace(statusMessage))
+{
+    <p class="text-success mt-3">@statusMessage</p>
+}
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <p class="text-danger mt-3">@errorMessage</p>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private UpdateWorkOrderRequest model = new();
+    private bool isLoading = true;
+    private string statusMessage = "";
+    private string errorMessage = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var client = HttpClientFactory.CreateClient();
+            client.BaseAddress = new Uri(Navigation.BaseUri);
+
+            var existing = await client.GetFromJsonAsync<WorkOrderDto>($"api/workorders/{Id}");
+
+            if (existing is null)
+            {
+                errorMessage = "Work order not found.";
+                return;
+            }
+
+            model = new UpdateWorkOrderRequest
+            {
+                Title = existing.Title,
+                Description = existing.Description,
+                Status = existing.Status,
+                SiteCode = existing.SiteCode
+            };
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading work order: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task Save()
+    {
+        statusMessage = "";
+        errorMessage = "";
+
+        if (string.IsNullOrWhiteSpace(model.Title))
+        {
+            errorMessage = "Title is required.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(model.SiteCode))
+        {
+            errorMessage = "Site Code is required.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(model.Status))
+        {
+            errorMessage = "Status is required.";
+            return;
+        }
+
+        try
+        {
+            var client = HttpClientFactory.CreateClient();
+            client.BaseAddress = new Uri(Navigation.BaseUri);
+
+            var response = await client.PutAsJsonAsync($"api/workorders/{Id}", model);
+
+            if (response.IsSuccessStatusCode)
+            {
+                statusMessage = "Work order updated successfully.";
+                Navigation.NavigateTo("/workorders?message=updated");
+                return;
+            }
+
+            var errorBody = await response.Content.ReadAsStringAsync();
+            errorMessage = $"Save failed: {errorBody}";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error saving work order: {ex.Message}";
+        }
+    }
+}

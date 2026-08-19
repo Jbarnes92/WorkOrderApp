@@ -1,0 +1,67 @@
+﻿@page "/workorders/create"
+@rendermode InteractiveServer
+@using System.Net.Http.Json
+@using WorkOrderApp.Application.WorkOrders.Models
+@inject NavigationManager Navigation
+@inject IHttpClientFactory HttpClientFactory
+
+<h3>Create Work Order</h3>
+
+<div class="mb-3">
+    <label>Title</label>
+    <input class="form-control" @bind="model.Title" />
+</div>
+
+<div class="mb-3">
+    <label>Description</label>
+    <textarea class="form-control" @bind="model.Description"></textarea>
+</div>
+
+<div class="mb-3">
+    <label>Site Code</label>
+    <input class="form-control" @bind="model.SiteCode" />
+</div>
+
+<button type="button" class="btn btn-primary" @onclick="Save">Save</button>
+<a class="btn btn-secondary ms-2" href="/workorders">Cancel</a>
+
+<p>@statusMessage</p>
+<p class="text-danger">@errorMessage</p>
+
+@code {
+    private CreateWorkOrderRequest model = new();
+    private string statusMessage = "";
+    private string errorMessage = "";
+
+    private async Task Save()
+    {
+        statusMessage = "Save clicked.";
+        errorMessage = "";
+
+        if (string.IsNullOrWhiteSpace(model.Title))
+        {
+            errorMessage = "Title is required.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(model.SiteCode))
+        {
+            errorMessage = "Site Code is required.";
+            return;
+        }
+
+        var client = HttpClientFactory.CreateClient();
+        client.BaseAddress = new Uri(Navigation.BaseUri);
+
+        var response = await client.PostAsJsonAsync("api/workorders", model);
+
+        if (response.IsSuccessStatusCode)
+        {
+            statusMessage = "Work order created successfully.";
+            Navigation.NavigateTo("/workorders?message=created");
+            return;
+        }
+
+        errorMessage = await response.Content.ReadAsStringAsync();
+    }
+}

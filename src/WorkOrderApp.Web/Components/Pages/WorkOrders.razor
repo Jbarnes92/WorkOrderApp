@@ -1,0 +1,188 @@
+﻿@page "/workorders"
+@rendermode InteractiveServer
+@using System.Net.Http.Json
+@using WorkOrderApp.Application.WorkOrders.Models
+@using Microsoft.AspNetCore.WebUtilities
+@inject NavigationManager Navigation
+@inject IHttpClientFactory HttpClientFactory
+
+<h3>Work Orders</h3>
+
+<a class="btn btn-primary mb-3" href="/workorders/create">Create Work Order</a>
+
+@if (!string.IsNullOrWhiteSpace(successMessage))
+{
+    <div class="alert alert-success">@successMessage</div>
+}
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+
+@if (workOrders == null)
+{
+    <p>Loading...</p>
+}
+else if (!workOrders.Any())
+{
+    <p>No work orders found.</p>
+}
+else
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Id</th>
+                <th>Title</th>
+                <th>Status</th>
+                <th>Site</th>
+                <th>Created</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            @foreach (var item in workOrders)
+            {
+                <tr @key="item.Id">
+                    <td>@item.Id</td>
+                    <td>@item.Title</td>
+                    <td>
+                        @if (item.Status == "Open")
+                        {
+                            <span class="badge bg-primary">Open</span>
+                        }
+                        else if (item.Status == "In Progress")
+                        {
+                            <span class="badge bg-warning text-dark">In Progress</span>
+                        }
+                        else if (item.Status == "Closed")
+                        {
+                            <span class="badge bg-success">Closed</span>
+                        }
+                    </td>
+                    <td>@item.SiteCode</td>
+                    <td>@item.CreatedAtUtc.ToLocalTime().ToString("g")</td>
+                    <td>
+                        <a class="btn btn-sm btn-secondary" href="/workorders/edit/@item.Id">Edit</a>
+
+                        <button type="button"
+                                class="btn btn-sm btn-danger ms-2"
+                                @onclick="() => ConfirmDelete(item.Id)">
+                            Delete
+                        </button>
+                    </td>
+                </tr>
+
+                @if (deleteId == item.Id)
+                {
+                    <tr>
+                        <td colspan="6">
+                            <div class="alert alert-warning mb-0">
+                                <strong>Confirm Delete</strong>
+                                <p class="mb-2">
+                                    Delete work order #@item.Id: <strong>@item.Title</strong>?
+                                </p>
+
+                                <button type="button"
+                                        class="btn btn-danger me-2"
+                                        @onclick="DeleteConfirmed">
+                                    Yes, Delete
+                                </button>
+
+                                <button type="button"
+                                        class="btn btn-secondary"
+                                        @onclick="CancelDelete">
+                                    Cancel
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<WorkOrderDto>? workOrders;
+    private string errorMessage = "";
+    private string? successMessage;
+    private int? deleteId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+
+        if (query.TryGetValue("message", out var message))
+        {
+            if (message == "created")
+                successMessage = "Work order created successfully.";
+            else if (message == "updated")
+                successMessage = "Work order updated successfully.";
+        }
+
+        await LoadWorkOrders();
+    }
+
+    private async Task LoadWorkOrders()
+    {
+        errorMessage = "";
+
+        try
+        {
+            var client = HttpClientFactory.CreateClient();
+            client.BaseAddress = new Uri(Navigation.BaseUri);
+
+            workOrders = await client.GetFromJsonAsync<List<WorkOrderDto>>("api/workorders");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading work orders: {ex.Message}";
+        }
+    }
+
+    private void ConfirmDelete(int id)
+    {
+        errorMessage = "";
+        successMessage = "";
+        deleteId = id;
+    }
+
+    private void CancelDelete()
+    {
+        deleteId = null;
+    }
+
+    private async Task DeleteConfirmed()
+    {
+        if (deleteId is null)
+            return;
+
+        try
+        {
+            var client = HttpClientFactory.CreateClient();
+            client.BaseAddress = new Uri(Navigation.BaseUri);
+
+            var idToDelete = deleteId.Value;
+            var response = await client.DeleteAsync($"api/workorders/{idToDelete}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                deleteId = null;
+                successMessage = "Work order deleted successfully.";
+                await LoadWorkOrders();
+                return;
+            }
+
+            var errorBody = await response.Content.ReadAsStringAsync();
+            errorMessage = $"Delete failed: {errorBody}";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error deleting work order: {ex.Message}";
+        }
+    }
+}
