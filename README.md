@@ -206,7 +206,6 @@ Example request body:
 {
   "title": "Repair loading dock door",
   "description": "Loading dock door is not closing correctly.",
-  "status": "Open",
   "siteCode": "ATL01"
 }
 ```
